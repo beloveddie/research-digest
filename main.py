@@ -1,10 +1,6 @@
 import streamlit as st
 import pdfplumber
 import cohere
-import re
-import networkx as nx
-import matplotlib.pyplot as plt
-from io import StringIO
 import os
 from dotenv import load_dotenv
 
@@ -25,62 +21,51 @@ def extract_text_from_pdf(pdf_file):
 def summarize_text(text, section="main points"):
     prompt = f"Summarize the following {section} of a research paper in 3-4 sentences: {text}"
     response = co.generate(
-        model="command-xlarge",  # Use the appropriate model
+        model="command-xlarge-nightly",  # Use the appropriate model
         prompt=prompt,
         max_tokens=150
     )
     return response.generations[0].text.strip()
 
-# Extract Citations
-def extract_citations(text):
-    citation_pattern = r'\[(.*?)\]'  # Regex for citations (e.g., [1] or [Smith et al., 2020])
-    citations = re.findall(citation_pattern, text)
-    return citations
-
-# Build and Visualize Citation Network
-def build_citation_network(citations):
-    G = nx.Graph()
-    
-    for citation in citations:
-        G.add_node(citation)
-    
-    for i, citation in enumerate(citations[:-1]):
-        G.add_edge(citation, citations[i+1])
-    
-    # Plot the network
-    plt.figure(figsize=(10, 8))
-    nx.draw(G, with_labels=True, node_size=3000, node_color="lightblue", font_size=10, font_weight="bold")
-    plt.title("Citation Network")
-    return plt
+# Question-Answering Using Cohere
+def answer_question(text, question):
+    prompt = f"Using the following text, answer the question accurately:\n\nText: {text}\n\nQuestion: {question}"
+    response = co.generate(
+        model="command-xlarge-nightly",
+        prompt=prompt,
+        max_tokens=150
+    )
+    return response.generations[0].text.strip()
 
 # Streamlit App
-st.title("ResearchDigest: Paper Summarizer & Citation Network Analyzer")
-st.subheader("Upload a research paper to get a summary and analyze its citation network.")
+st.title("ResearchDigest: Multi-Paper Summarizer & QA System")
+st.subheader("Upload research papers to summarize them and ask questions.")
 
-uploaded_file = st.file_uploader("Upload Research Paper (PDF)", type=["pdf"])
+uploaded_files = st.file_uploader("Upload Research Papers (PDF)", type=["pdf"], accept_multiple_files=True)
 
-if uploaded_file is not None:
-    # Extract text from uploaded PDF
-    with st.spinner("Extracting text from the PDF..."):
-        pdf_text = extract_text_from_pdf(uploaded_file)
+if uploaded_files:
+    all_texts = {}
     
-    # Summarize the text
-    with st.spinner("Summarizing the research paper..."):
-        summary = summarize_text(pdf_text[:1000])  # Process first 1000 characters for demo
+    for uploaded_file in uploaded_files:
+        with st.spinner(f"Processing {uploaded_file.name}..."):
+            # Extract text from each uploaded file
+            pdf_text = extract_text_from_pdf(uploaded_file)
+            all_texts[uploaded_file.name] = pdf_text
     
-    # Display summary
-    st.subheader("Summary")
-    st.write(summary)
+    # Display Summaries for Each Paper
+    st.subheader("Summaries")
+    for file_name, text in all_texts.items():
+        with st.spinner(f"Summarizing {file_name}..."):
+            summary = summarize_text(text[:1000])  # Summarize first 1000 characters
+        st.write(f"**{file_name}**")
+        st.write(summary)
     
-    # Extract and visualize citations
-    with st.spinner("Analyzing citations..."):
-        citations = extract_citations(pdf_text)
-        st.subheader("Citations")
-        st.write(citations)
-        
-        if citations:
-            st.subheader("Citation Network")
-            fig = build_citation_network(citations)
-            st.pyplot(fig)
-        else:
-            st.write("No citations detected.")
+    # Add QA System
+    st.subheader("Ask Questions")
+    selected_file = st.selectbox("Select a paper to ask questions about:", list(all_texts.keys()))
+    question = st.text_input("Enter your question:")
+    
+    if st.button("Get Answer") and question:
+        with st.spinner("Generating answer..."):
+            answer = answer_question(all_texts[selected_file], question)
+        st.write(f"**Answer:** {answer}")
