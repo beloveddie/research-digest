@@ -20,8 +20,8 @@
 
 1. Clone the repository:  
    ```bash
-   git clone https://github.com/your-username/researchdigest.git
-   cd researchdigest
+   git clone https://github.com/beloveddie/research-digest.git
+   cd research-digest
    ```  
 
 2. Install the required dependencies:  
